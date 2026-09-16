@@ -1,0 +1,52 @@
+name: Domovid auto-publish
+
+on:
+  schedule:
+    # Runs every 30 min around the clock; publish.mjs decides (in Europe/Bratislava
+    # wall-clock time) whether a schedule slot is actually due, so most runs are
+    # harmless no-ops. This avoids GitHub Actions cron's UTC-only/DST-unaware
+    # limitation instead of hand-converting Tue19:00/Wed19:00/Thu12:30 to UTC.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (log the decision, skip real Composio publish calls)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: domovid-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: scripts
+        run: npm install --no-save
+
+      - name: Run publish check/publish
+        working-directory: scripts
+        env:
+          COMPOSIO_API_KEY: ${{ secrets.COMPOSIO_API_KEY }}
+          COMPOSIO_USER_ID: ${{ secrets.COMPOSIO_USER_ID }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: node publish.mjs
+
+      - name: Commit state changes
+        run: |
+          git config user.name "domovid-publish-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add publish-state.json backlog/ || true
+          git diff --cached --quiet || git commit -m "Auto-publish: mark item published [skip ci]"
+          git push

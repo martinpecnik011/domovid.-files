@@ -1,0 +1,9 @@
+{
+  "name": "domovid-publish",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@composio/core": "^0.14.0"
+  }
+}
